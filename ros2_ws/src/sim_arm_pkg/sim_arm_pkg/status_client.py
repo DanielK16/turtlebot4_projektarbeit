@@ -7,7 +7,7 @@ import os
 
 # Imports für ROS2 Messages
 from irobot_create_msgs.msg import DockStatus, WheelVels
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, BatteryState
 from std_msgs.msg import String
 
 # Imports für Asyncua
@@ -40,6 +40,10 @@ class OPC_UA_Client_Node(Node):
         self.linear_acceleration = None
         # ip
         self.ip = None
+        #batterystate
+        self.voltage = None
+        self.temperature = None
+        self.percentage = None
 
         # Subscriber für /dock_status
         self.dock_status_sub = self.create_subscription(
@@ -63,10 +67,18 @@ class OPC_UA_Client_Node(Node):
             1)
 
         # Subscriber für /ip
-        self.ip = self.create_subscription(
+        self.ip_sub = self.create_subscription(
             String, 
             '/ip',
             self.ip_callback,
+            1
+        )
+
+        # Subscriber für /battery_state
+        self.battery_state_sub = self.create_subscription(
+            BatteryState,
+            '/battery_state',
+            self.battery_state_callback,
             1
         )
 
@@ -86,6 +98,11 @@ class OPC_UA_Client_Node(Node):
 
     def ip_callback(self,msg):
         self.ip = msg.data
+
+    def battery_state_callback(self,msg):
+        self.voltage = msg.voltage
+        self.temperature = msg.temperature
+        self.percentage = msg.percentage
 
 async def async_main(args=None):
     # Instanzziieren der ROS2 Node Klasse
@@ -132,6 +149,12 @@ async def async_main(args=None):
 
         ip_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.ip.ip")
 
+        battery_state_node = {
+            "voltage": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.battery_state.voltage"),
+            "temperature": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.battery_state.temperature"),
+            "percentage": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.battery_state.percentage"),
+        }
+
         try:
             # Hauptschleife
             while rclpy.ok():
@@ -167,6 +190,13 @@ async def async_main(args=None):
 
                 if ros_node.ip is not None:
                     await ip_node.set_value(str(ros_node.ip), ua.VariantType.String)
+
+                if ros_node.voltage is not None:
+                    await battery_state_node["voltage"].set_value(float(ros_node.voltage), ua.VariantType.Float)
+                if ros_node.temperature is not None:
+                    await battery_state_node["temperature"].set_value(float(ros_node.temperature), ua.VariantType.Float)
+                if ros_node.percentage is not None:
+                    await battery_state_node["percentage"].set_value(float(ros_node.percentage), ua.VariantType.Float)
 
                 # Kurze Pause 
                 await asyncio.sleep(0.05)

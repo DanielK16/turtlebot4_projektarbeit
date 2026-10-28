@@ -21,6 +21,15 @@
       <UserDefElement iecname="y" type="T_LREAL" byteoffset="8" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="z" type="T_LREAL" byteoffset="16" vartype="VAR" access="ReadWrite" />
     </TypeUserDef>
+    <TypeUserDef name="T_battery_state" size="28" nativesize="28" typeclass="Userdef" pouclass="STRUCTURE" iecname="battery_state">
+      <UserDefElement iecname="voltage" type="T_REAL" byteoffset="0" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="temperature" type="T_REAL" byteoffset="4" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="current" type="T_REAL" byteoffset="8" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="charge" type="T_REAL" byteoffset="12" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="capacity" type="T_REAL" byteoffset="16" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="design_capacity" type="T_REAL" byteoffset="20" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="percentage" type="T_REAL" byteoffset="24" vartype="VAR" access="ReadWrite" />
+    </TypeUserDef>
     <TypeUserDef name="T_dock_status" size="2" nativesize="2" typeclass="Userdef" pouclass="STRUCTURE" iecname="dock_status">
       <UserDefElement iecname="dock_visible" type="T_BOOL" byteoffset="0" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="is_docked" type="T_BOOL" byteoffset="1" vartype="VAR" access="ReadWrite" />
@@ -37,11 +46,12 @@
       <UserDefElement iecname="angular_velocity" type="T_Vector3" byteoffset="32" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="linear_acceleration" type="T_Vector3" byteoffset="56" vartype="VAR" access="ReadWrite" />
     </TypeUserDef>
-    <TypeUserDef name="T_tb4_status" size="177" nativesize="184" typeclass="Userdef" pouclass="STRUCTURE" iecname="tb4_status">
+    <TypeUserDef name="T_tb4_status" size="208" nativesize="208" typeclass="Userdef" pouclass="STRUCTURE" iecname="tb4_status">
       <UserDefElement iecname="dock_status" type="T_dock_status" byteoffset="0" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="wheel_vels" type="T_wheel_vels" byteoffset="4" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="imu" type="T_imu" byteoffset="16" vartype="VAR" access="ReadWrite" />
       <UserDefElement iecname="ip" type="T_ip" byteoffset="96" vartype="VAR" access="ReadWrite" />
+      <UserDefElement iecname="battery_state" type="T_battery_state" byteoffset="180" vartype="VAR" access="ReadWrite" />
     </TypeUserDef>
   </TypeList>
   <NodeList>
