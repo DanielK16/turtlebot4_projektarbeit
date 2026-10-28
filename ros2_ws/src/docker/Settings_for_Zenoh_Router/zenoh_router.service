@@ -1,0 +1,16 @@
+[Unit]
+Description= Zenoh Router (mit snap installiert) bei Start des Rasperry Pi starten
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/bin/bash -lc '/home/ubuntu/start_zenoh_router.bash'
+Restart=on-failure
+RestartSec=10s
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

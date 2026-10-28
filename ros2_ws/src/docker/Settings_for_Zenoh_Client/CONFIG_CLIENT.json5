@@ -1,0 +1,16 @@
+{
+  mode: "client",
+
+  connect: {
+    endpoints: ["tcp/192.168.2.189:7447"]
+  },
+
+  transport: {
+    auth: {
+      usrpwd: {
+        user: "turtlebot4_zenoh",
+        password: "turtlebot4"
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "mode": "router",
+  "transport": {
+    "auth": {
+      "usrpwd": {
+        "dictionary_file": "/home/ubuntu/zenoh_bridge/credentials.txt"
+      }
+    }
+  }
+}
