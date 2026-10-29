@@ -162,11 +162,25 @@ def Start_Navigation2():
         return
 
     command = "ros2 launch turtlebot4_navigation nav2.launch.py"
-    RVIZ2_ROBOT_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
-    print("RViz2 Roboter Launch gestartet")
-    RVIZ2_ROBOT_IS_RUNNING=True
+    NAV2_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
+    print("Nav2 Launch gestartet")
+    NAV2_IS_RUNNING=True
+
 def Stop_Navigation2():
-    print("nav2 s")
+    global NAV2_IS_RUNNING
+    global NAV2_PROZESS
+    if NAV2_IS_RUNNING is True:
+        print("Sende Stop Signal...")
+        try:
+            os.killpg(os.getpgid(NAV2_PROZESS.pid), signal.SIGINT)
+            NAV2_PROZESS.wait(timeout=5)
+            print(f"NAV2 Launch erfolgreich beendet")
+        except Exception as e:
+            print(f"Fehler beim Beenden: {e}")
+        finally:
+            NAV2_IS_RUNNING = False
+    else:
+        print("Kein Prozess da zum stoppen!")
 
 
 class SubscriptionHandler:

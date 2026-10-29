@@ -9,6 +9,7 @@ import os
 from irobot_create_msgs.msg import DockStatus, WheelVels
 from sensor_msgs.msg import Imu, BatteryState
 from std_msgs.msg import String
+from nav_msgs.msg import Odometry
 # Import QoS Default Settings
 from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data
 
@@ -41,12 +42,27 @@ class OPC_UA_Client_Node(Node):
         self.orientation = None
         self.angular_velocity = None
         self.linear_acceleration = None
-        # ip
+        # /ip
         self.ip = None
-        #batterystate
+        # /battery_status
         self.voltage = None
         self.temperature = None
         self.percentage = None
+        # /odom
+        self.odom_position_x = None
+        self.odom_position_y = None
+        self.odom_position_z = None
+        self.odom_orientierung_x = None
+        self.odom_orientierung_y = None
+        self.odom_orientierung_z = None
+        self.odom_orientierung_w = None
+        self.odom_vel_linear_x = None
+        self.odom_vel_linear_y = None
+        self.odom_vel_linear_z = None
+        self.odom_angular_x = None
+        self.odom_angular_y = None
+        self.odom_angular_z = None
+        self.odom_angular_w = None
 
         # Subscriber für /dock_status
         self.dock_status_sub = self.create_subscription(
@@ -85,7 +101,14 @@ class OPC_UA_Client_Node(Node):
             qos_profile_sensor_data
         )
 
-        
+        # Subscriber für /odom
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            '/odom',
+            self.odom_callback,
+            qos_profile_sensor_data
+        )
+
 
     # Verarbeiten von Subscribern erhaltenen Daten    
     def dock_status_callback(self, msg):
@@ -108,6 +131,22 @@ class OPC_UA_Client_Node(Node):
         self.voltage = msg.voltage
         self.temperature = msg.temperature
         self.percentage = msg.percentage
+
+    def odom_callback(self,msg):
+        self.odom_position_x = msg.pose.pose.position.x
+        self.odom_position_y = msg.pose.pose.position.y
+        self.odom_position_z = msg.pose.pose.position.z
+        self.odom_orientierung_x = msg.pose.pose.orientation.x
+        self.odom_orientierung_y = msg.pose.pose.orientation.y
+        self.odom_orientierung_z = msg.pose.pose.orientation.z
+        self.odom_orientierung_w = msg.pose.pose.orientation.w
+        self.odom_vel_linear_x = msg.twist.twist.linear.x
+        self.odom_vel_linear_y = msg.twist.twist.linear.y
+        self.odom_vel_linear_z = msg.twist.twist.linear.z
+        self.odom_angular_x = msg.twist.twist.angular.x
+        self.odom_angular_y = msg.twist.twist.angular.y
+        self.odom_angular_z = msg.twist.twist.angular.y
+        self.odom_angular_w = msg.twist.twist.angular.y
 
 async def async_main(args=None):
     # Instanzziieren der ROS2 Node Klasse
@@ -160,6 +199,23 @@ async def async_main(args=None):
             "percentage": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.battery_state.percentage"),
         }
 
+        odom_node = {
+            "odom_position_x": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.position.x"),
+            "odom_position_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.position.y"),
+            "odom_position_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.position.z"),
+            "odom_orientierung_x": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.orientation.x"),
+            "odom_orientierung_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.orientation.y"),
+            "odom_orientierung_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.orientation.z"),
+            "odom_orientierung_w": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.pose.orientation.w"),
+            "odom_vel_linear_x": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.linear.x"),
+            "odom_vel_linear_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.linear.y"),
+            "odom_vel_linear_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.linear.z"),
+            "odom_angular_x": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.x"),
+            "odom_angular_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.y"),
+            "odom_angular_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.z"),
+            "odom_angular_w": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.w"),
+        }
+
         try:
             # Hauptschleife
             while rclpy.ok():
@@ -203,6 +259,23 @@ async def async_main(args=None):
                 if ros_node.percentage is not None:
                     await battery_state_node["percentage"].set_value(float(ros_node.percentage), ua.VariantType.Float)
 
+                if ros_node.odom_position_x is not None:
+                    await odom_node["odom_position_x"].set_value(float(ros_node.odom_position_x), ua.VariantType.Double)
+                    await odom_node["odom_position_y"].set_value(float(ros_node.odom_position_y), ua.VariantType.Double)
+                    await odom_node["odom_position_z"].set_value(float(ros_node.odom_position_z), ua.VariantType.Double)
+
+                    await odom_node["odom_orientierung_x"].set_value(float(ros_node.odom_orientierung_x), ua.VariantType.Double)
+                    await odom_node["odom_orientierung_y"].set_value(float(ros_node.odom_orientierung_y), ua.VariantType.Double)
+                    await odom_node["odom_orientierung_z"].set_value(float(ros_node.odom_orientierung_z), ua.VariantType.Double)
+                    await odom_node["odom_orientierung_w"].set_value(float(ros_node.odom_orientierung_w), ua.VariantType.Double)
+
+                    await odom_node["odom_vel_linear_x"].set_value(float(ros_node.odom_vel_linear_x), ua.VariantType.Double)
+                    await odom_node["odom_vel_linear_y"].set_value(float(ros_node.odom_vel_linear_y), ua.VariantType.Double)
+                    await odom_node["odom_vel_linear_z"].set_value(float(ros_node.odom_vel_linear_z), ua.VariantType.Double)
+
+                    await odom_node["odom_angular_x"].set_value(float(ros_node.odom_angular_x), ua.VariantType.Double)
+                    await odom_node["odom_angular_y"].set_value(float(ros_node.odom_angular_y), ua.VariantType.Double)
+                    await odom_node["odom_angular_z"].set_value(float(ros_node.odom_angular_z), ua.VariantType.Double)
                 # Kurze Pause 
                 await asyncio.sleep(0.05)
                 
