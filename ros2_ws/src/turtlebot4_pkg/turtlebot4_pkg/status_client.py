@@ -5,10 +5,13 @@ import rclpy
 from rclpy.node import Node
 import os
 
-# Imports für ROS2 Messages
+# Import Interfaces für ROS2 Messages
 from irobot_create_msgs.msg import DockStatus, WheelVels
 from sensor_msgs.msg import Imu, BatteryState
 from std_msgs.msg import String
+# Import QoS Default Settings
+from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data
+
 
 # Imports für Asyncua
 import asyncio
@@ -18,7 +21,7 @@ logging.basicConfig(level=logging.WARNING) # reduziert Fehlermeldungen von async
 
 # Laden der Konfigurations Datei
 import yaml
-with open("/home/ros/ros2_ws/src/sim_arm_pkg/config/opc_topic_config.yml", "r") as f:
+with open("/home/ros/ros2_ws/src/turtlebot4_pkg/config/opc_topic_config.yml", "r") as f:
     config = yaml.safe_load(f)
     # Environment Variable von docker run übergebn
 config['OPC_Client']['ipaddress'] = os.environ.get('OPC_IP', config['OPC_Client']['ipaddress'])
@@ -50,28 +53,28 @@ class OPC_UA_Client_Node(Node):
             DockStatus,
             '/dock_status',
             self.dock_status_callback,
-            1)
+            qos_profile_sensor_data)
 
         # Subscriber für /wheel_vels
         self.wheel_vels_sub = self.create_subscription(
             WheelVels,
             '/wheel_vels',
             self.wheel_vels_callback,
-            1)
+            qos_profile_sensor_data)
 
         # Subscriber für /imu
         self.imu_sub = self.create_subscription(
             Imu,
             '/imu',
             self.imu_callback,
-            1)
+            qos_profile_sensor_data)
 
         # Subscriber für /ip
         self.ip_sub = self.create_subscription(
             String, 
             '/ip',
             self.ip_callback,
-            1
+            qos_profile_system_default
         )
 
         # Subscriber für /battery_state
@@ -79,8 +82,10 @@ class OPC_UA_Client_Node(Node):
             BatteryState,
             '/battery_state',
             self.battery_state_callback,
-            1
+            qos_profile_sensor_data
         )
+
+        
 
     # Verarbeiten von Subscribern erhaltenen Daten    
     def dock_status_callback(self, msg):

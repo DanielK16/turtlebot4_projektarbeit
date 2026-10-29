@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'sim_arm_pkg'
+package_name = 'turtlebot4_pkg'
 
 setup(
     name=package_name,
@@ -30,7 +30,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'status_client = sim_arm_pkg.status_client:main',
+            'status_client = turtlebot4_pkg.status_client:main',
+            'command_client = turtlebot4_pkg.command_client:main'
         ],
     },
 )
