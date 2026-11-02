@@ -30,6 +30,9 @@ RVIZ2_ROBOT_PROZESS = None
 NAV2_PROZESS = None
 LOCALIZATION_PROZESS = None
 
+# Name für Lokalisierungslaunch
+NAME_LOKALISIERUNG = "test_map"
+
 def Start_SLAM_sync():
     global SLAM_SYNC_IS_RUNNING
     global SLAM_SYNC_PROZESS
@@ -63,7 +66,7 @@ def Start_SLAM_async():
     global SLAM_ASYNC_IS_RUNNING
     global SLAM_ASYNC_PROZESS
     # Verhindern, dass der Launch doppelt gestartet wird
-    if SLAM_ASYNC_IS_RUNNING is True and SLAM_AYNC_PROZESS.poll() is None:
+    if SLAM_ASYNC_IS_RUNNING is True and SLAM_ASYNC_PROZESS.poll() is None:
         print("SLAM Asynchron läuft bereits!")
         return
 
@@ -149,9 +152,34 @@ def Stop_OPC_Clients():
         print("Kein Prozess da zum stoppen!")
 
 def Start_Lokalisierung():
-    print("start lokal")
+    global LOCALISATION_IS_RUNNING
+    global LOCALIZATION_PROZESS
+    global NAME_LOKALISIERUNG
+    # Verhindern, dass der Launch doppelt gestartet wird
+    if LOCALISATION_IS_RUNNING is True and LOCALIZATION_PROZESS.poll() is None:
+        print("Lokalisierung läuft bereits!")
+        return
+
+    command = f"ros2 launch turtlebot4_navigation localization.launch.py map:=/home/ros/ros2_ws/src/turtlebot4_pkg/maps/{NAME_LOKALISIERUNG}.yaml"
+    LOCALIZATION_PROZESS = subprocess.Popen(["/bin/bash", "-c", command], start_new_session=True)
+    print("Lokalisierungslaunch gestartet gestartet")
+    LOCALISATION_IS_RUNNING=True
+
 def Stop_Lokalisierung():
-    print("stop lokal")
+    global LOCALISATION_IS_RUNNING
+    global LOCALIZATION_PROZESS
+    if LOCALISATION_IS_RUNNING is True:
+        print("Sende Stop Signal...")
+        try:
+            os.killpg(os.getpgid(LOCALIZATION_PROZESS.pid), signal.SIGINT)
+            LOCALIZATION_PROZESS.wait(timeout=5)
+            print(f"Lokalisierung Launch erfolgreich beendet")
+        except Exception as e:
+            print(f"Fehler beim Beenden: {e}")
+        finally:
+            LOCALISATION_IS_RUNNING = False
+    else:
+        print("Kein Prozess da zum stoppen!")
 
 def Start_Navigation2():
     global NAV2_IS_RUNNING
@@ -213,6 +241,10 @@ class SubscriptionHandler:
                     Start_Navigation2()
                 elif "Stop_Navigation2" in str(node.nodeid):
                     Stop_Navigation2()
+            if val is not None:
+                if "Name_Lokalisierung" in str(node.nodeid):
+                    global NAME_LOKALISIERUNG 
+                    NAME_LOKALISIERUNG = str(val)
         except Exception as e:
             print(f"Fehler im Subscription Handler: {e}")
 
@@ -234,23 +266,24 @@ async def async_main():
 
                 nodes = [
                     # Sync Slam
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_SLAM_sync"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_SLAM_sync"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_SLAM_sync"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_SLAM_sync"),
                     # Async SLAM
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_SLAM_async"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_SLAM_async"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_SLAM_async"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_SLAM_async"),
                     # RViz2 Roboter
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_RViz2_Robot"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_RViz2_Robot"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_RViz2_Robot"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_RViz2_Robot"),
                     # OPC Kommunikation
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_OPC_Clients"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_OPC_Clients"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_OPC_Clients"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_OPC_Clients"),
                     # Lokalisierung
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_Lokalisierung"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_Lokalisierung"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_Lokalisierung"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_Lokalisierung"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Name_Lokalisierung"),
                     # Navigation 2
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Start_Navigation2"),
-                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.Stop_Navigation2"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_Navigation2"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_Navigation2"),
                 ]
 
                 # Subscription erstellen

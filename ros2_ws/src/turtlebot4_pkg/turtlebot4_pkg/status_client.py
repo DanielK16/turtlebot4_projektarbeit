@@ -1,5 +1,5 @@
 # Autor: Daniel Körper
-
+# Subscribed zu Topics vom Turtlebot4 und überträgt sie per OPC UA an Codesys
 # Imports
 import rclpy
 from rclpy.node import Node

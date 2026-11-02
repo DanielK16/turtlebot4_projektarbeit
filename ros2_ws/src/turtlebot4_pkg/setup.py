@@ -31,7 +31,8 @@ setup(
     entry_points={
         'console_scripts': [
             'status_client = turtlebot4_pkg.status_client:main',
-            'command_client = turtlebot4_pkg.command_client:main'
+            'command_client = turtlebot4_pkg.command_client:main',
+            'action_client = turtlebot4_pkg.action_client:main'
         ],
     },
 )

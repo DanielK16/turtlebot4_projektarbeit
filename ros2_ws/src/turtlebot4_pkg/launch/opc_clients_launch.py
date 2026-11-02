@@ -5,7 +5,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-
     return LaunchDescription([
 
         Node(
@@ -18,5 +17,11 @@ def generate_launch_description():
             package = 'turtlebot4_pkg',
             executable = 'command_client',
             name = 'command_client_node'
+        ),
+
+        Node(
+            package = 'turtlebot4_pkg',
+            executable = 'action_client',
+            name = 'action_client_node'
         ),
     ])
