@@ -240,13 +240,23 @@ async def async_main(args=None):
                 goalpose_node["request_move"]
             ])
 
+            watchdog_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.watchdog_counter")
+            watchdog_counter = 0
+
             # Hauptschleife:
             while rclpy.ok():
                 rclpy.spin_once(ros_node, timeout_sec=0.0)
-                
+
+                # Watchdog Variable erhöhen und schreiben
+                try:
+                    watchdog_counter = (watchdog_counter +1) % 32767
+                    await watchdog_node.write_value(int(watchdog_counter), ua.VariantType.Int16)
+                except Exception as e:
+                    ros_node.get_logger().warn(f"Watchdog konnte nicht gesendet werden: {e}")
+
                 # neuen Statuscode anlegen
                 if ros_node.nav_status_code is not None:
-                    await status_code_node.write_value(
+                    await status_code_node.set_value(
                         ua.DataValue(ua.Variant(int(ros_node.nav_status_code), ua.VariantType.Int16))
                     )
                     ros_node.get_logger().info(f"Statuscode '{ros_node.nav_status_code}' an CODESYS übertragen.")
@@ -258,7 +268,6 @@ async def async_main(args=None):
         ros_node.get_logger().error(f"OPC-UA-Fehler: {e}")
     finally:
         ros_node.destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)

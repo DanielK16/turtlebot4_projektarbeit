@@ -21,6 +21,7 @@ OPC_CLIENTS_IS_RUNNING = False
 RVIZ2_ROBOT_IS_RUNNING = False
 NAV2_IS_RUNNING = False
 LOCALISATION_IS_RUNNING= False
+ZENOH_IS_RUNNING = False
 
 # Prozesse
 SLAM_SYNC_PROZESS = None
@@ -29,9 +30,38 @@ OPC_CLIENTS_PROZESS = None
 RVIZ2_ROBOT_PROZESS = None
 NAV2_PROZESS = None
 LOCALIZATION_PROZESS = None
+ZENOH_PROZESS = None
 
 # Name für Lokalisierungslaunch
 NAME_LOKALISIERUNG = "test_map"
+
+def Start_Zenoh():
+    global ZENOH_IS_RUNNING
+    global ZENOH_PROZESS
+    if ZENOH_IS_RUNNING is True and ZENOH_PROZESS.poll() is None:
+        print("Zenoh Client läuft bereits!")
+        return
+
+    command = "/home/ros/zenoh/zenoh-bridge-ros2dds -c /home/ros/ros2_ws/docker/Settings_for_Zenoh_Client/CONFIG_CLIENT.json5 "
+    ZENOH_PROZESS = subprocess.Popen(["/bin/bash", "-c", command], start_new_session=True)
+    print("Zenoh Client gestartet")
+    ZENOH_IS_RUNNING = True
+
+def Stop_Zenoh():
+    global ZENOH_IS_RUNNING
+    global ZENOH_PROZESS
+    if ZENOH_IS_RUNNING is True:
+        print("Sende Stop Signal an Zenoh...")
+        try:
+            os.killpg(os.getpgid(ZENOH_PROZESS.pid), signal.SIGINT)
+            ZENOH_PROZESS.wait(timeout=5)
+            print(f"Zenoh Client erfolgreich beendet")
+        except Exception as e:
+            print(f"Fehler beim Beenden: {e}")
+        finally:
+            ZENOH_IS_RUNNING = False
+    else:
+        print("Kein Zenoh Prozess da zum stoppen!")
 
 def Start_SLAM_sync():
     global SLAM_SYNC_IS_RUNNING
@@ -241,6 +271,10 @@ class SubscriptionHandler:
                     Start_Navigation2()
                 elif "Stop_Navigation2" in str(node.nodeid):
                     Stop_Navigation2()
+                elif "Start_Zenoh" in str(node.nodeid):
+                    Start_Zenoh()
+                elif "Stop_Zenoh" in str(node.nodeid):
+                    Stop_Zenoh()
             if val is not None:
                 if "Name_Lokalisierung" in str(node.nodeid):
                     global NAME_LOKALISIERUNG 
@@ -284,6 +318,9 @@ async def async_main():
                     # Navigation 2
                     client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_Navigation2"),
                     client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_Navigation2"),
+                    # Zenoh
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Start_Zenoh"),
+                    client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.config.Stop_Zenoh"),
                 ]
 
                 # Subscription erstellen

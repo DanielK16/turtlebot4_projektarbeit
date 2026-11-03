@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # For Visualizing and Interfacing with Turtlebot from a PC
     ros-${ROS_DISTRO}-turtlebot4-desktop \
     # teleop twist keyboard
-    ros-${ROS_DISTRO}-teleop-twist-keyboard -y \
+    ros-${ROS_DISTRO}-teleop-twist-keyboard \
     # Lidar Drivers
     ros-${ROS_DISTRO}-rplidar-ros \
     # OAK D Camera Drivers
@@ -81,6 +81,20 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
+# Github Clone
+WORKDIR /home/ros/tmp
+RUN git clone https://github.com/DanielK16/turtlebot4_projektarbeit.git
+# Dateien innerhalb des Containers verschieben 
+RUN mkdir -p /home/ros/ros2_ws/src && \
+    cp -r /home/ros/tmp/turtlebot4_projektarbeit/ros2_ws/src/* /home/ros/ros2_ws/src/ && \
+    rm -rf /home/ros/tmp
+WORKDIR /home/ros/ros2_ws
+RUN rosdep update 
+RUN sudo apt-get update && \
+    rosdep install --from-paths src --ignore-src -r -y && \
+    sudo rm -rf /var/lib/apt/lists/*
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+
 # Zenoh Install
 WORKDIR /home/ros/zenoh
 
@@ -89,6 +103,7 @@ RUN sudo apt-get update && \
     python3-pip \
     unzip \
     wget \
+    nano \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
 
 RUN sudo apt-get update && \
@@ -104,4 +119,5 @@ ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ENV ROS_DOMAIN_ID=0
 ENV ROS_LOCALHOST_ONLY=0
 
-CMD ["bash"]
+# Automatischer Start der entrypoint.py
+CMD ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && python3 /home/ros/ros2_ws/docker/entrypoint.py"]

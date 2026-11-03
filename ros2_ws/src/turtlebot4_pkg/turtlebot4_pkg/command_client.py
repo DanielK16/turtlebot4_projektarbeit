@@ -16,9 +16,10 @@ from std_msgs.msg import String
 
 # Imports für Asyncua
 import asyncio
-from asyncua import Client
+from asyncua import Client, ua
 import logging
 import os
+import time
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -35,11 +36,7 @@ class OPC_UA_Client_Node(Node):
         super().__init__("opc_ua_client_node")
 
         # Publisher erstellen /cmd_vel
-        self.cmd_vel_publisher = self.create_publisher(
-            Twist,
-            "/cmd_vel",
-            10
-        )
+        self.cmd_vel_publisher = self.create_publisher(Twist,"/cmd_vel",10)
 
         # Aktuelle Sollwerte für /cmd_vel
         self.cmd_vel_freigabe = None
@@ -202,6 +199,9 @@ async def async_main(args=None):
                 "request_save_map": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.command.request_save_map") 
             }
 
+            watchdog_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.command.watchdog_counter")
+            watchdog_counter = 0
+
             # Subscription Handler
             handler = SubscriptionHandler(ros_node)
             subscription = await client.create_subscription(100,handler)
@@ -220,14 +220,25 @@ async def async_main(args=None):
             # Hauptschleife:
             while rclpy.ok():
                 rclpy.spin_once(ros_node,timeout_sec=0.0)
+
+                # Watchdog Variable erhöhen und schreiben
+                try:
+                    watchdog_counter = (watchdog_counter +1) % 32767
+                    await watchdog_node.set_value(int(watchdog_counter), ua.VariantType.Int16)
+                except Exception as e:
+                    ros_node.get_logger().warn(f"Watchdog konnte nicht gesendet werden: {e}")
+
                 await asyncio.sleep(0.01)
 
     except Exception as e:
         ros_node.get_logger().error(f"OPC-UA-Fehler: {e}")
     finally:
-        # Beim Beenden des Programms sichergehen dass Roboter gestoppt ist!
-        ros_node.stop_cmd_vel_control()
-        ros_node.destroy_node()
+        if rclpy.ok():
+            # Beim Beenden des Programms sichergehen dass Roboter gestoppt ist!
+            ros_node.get_logger().info("Sende Stopp-Signal an Roboter...")
+            ros_node.stop_cmd_vel_control()
+            time.sleep(0.1)
+            ros_node.destroy_node()
 
 
 def main(args=None):

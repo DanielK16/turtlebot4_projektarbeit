@@ -49,20 +49,10 @@ class OPC_UA_Client_Node(Node):
         self.temperature = None
         self.percentage = None
         # /odom
-        self.odom_position_x = None
-        self.odom_position_y = None
-        self.odom_position_z = None
-        self.odom_orientierung_x = None
-        self.odom_orientierung_y = None
-        self.odom_orientierung_z = None
-        self.odom_orientierung_w = None
-        self.odom_vel_linear_x = None
-        self.odom_vel_linear_y = None
-        self.odom_vel_linear_z = None
-        self.odom_angular_x = None
-        self.odom_angular_y = None
-        self.odom_angular_z = None
-        self.odom_angular_w = None
+        self.odom_position = None
+        self.odom_orientation = None
+        self.odom_linear = None
+        self.odom_angular = None
 
         # Subscriber für /dock_status
         self.dock_status_sub = self.create_subscription(
@@ -133,20 +123,15 @@ class OPC_UA_Client_Node(Node):
         self.percentage = msg.percentage
 
     def odom_callback(self,msg):
-        self.odom_position_x = msg.pose.pose.position.x
-        self.odom_position_y = msg.pose.pose.position.y
-        self.odom_position_z = msg.pose.pose.position.z
-        self.odom_orientierung_x = msg.pose.pose.orientation.x
-        self.odom_orientierung_y = msg.pose.pose.orientation.y
-        self.odom_orientierung_z = msg.pose.pose.orientation.z
-        self.odom_orientierung_w = msg.pose.pose.orientation.w
-        self.odom_vel_linear_x = msg.twist.twist.linear.x
-        self.odom_vel_linear_y = msg.twist.twist.linear.y
-        self.odom_vel_linear_z = msg.twist.twist.linear.z
-        self.odom_angular_x = msg.twist.twist.angular.x
-        self.odom_angular_y = msg.twist.twist.angular.y
-        self.odom_angular_z = msg.twist.twist.angular.y
-        self.odom_angular_w = msg.twist.twist.angular.y
+        self.odom_position = msg.pose.pose.position
+        self.odom_orientation = msg.pose.pose.orientation
+        self.odom_linear = msg.twist.twist.linear
+        self.odom_angular = msg.twist.twist.angular
+
+def spin_ros(ros_node):
+    """ Verarbeitet die ROS2 Callbacks (spin_once verarbeitet nur einen Callback) """
+    for _ in range(10):
+        rclpy.spin_once(ros_node,timeout_sec=0.0)
 
 async def async_main(args=None):
     # Instanzziieren der ROS2 Node Klasse
@@ -165,7 +150,7 @@ async def async_main(args=None):
                       reconnect_request_timeout = 5.0, ) as client:
         ros_node.get_logger().info(f"OPC Client verbunden: {opc_url}")
 
-        # Verbindung zu Knoten im OPC-UA Server herstelle
+        # Verbindung zu Knoten im OPC-UA Server herstellen
         dock_status_node = {
             "is_docked": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.dock_status.is_docked"),
             "dock_visible": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.dock_status.dock_visible")
@@ -216,67 +201,106 @@ async def async_main(args=None):
             "odom_angular_w": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.w"),
         }
 
+        watchdog_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.watchdog_counter")
+        watchdog_counter = 0
+
         try:
             # Hauptschleife
             while rclpy.ok():
                 
-                # ROS2 Callbacks verarbeiten -> ließt neue msg für Subscriber ein
-                rclpy.spin_once(ros_node, timeout_sec=0.0)
+                # ROS2 Callbacks verarbeiten 
+                spin_ros(ros_node)
                 
+                # Watchdog Variable erhöhen und schreiben
+                try:
+                    watchdog_counter = (watchdog_counter +1) % 32767
+                    await watchdog_node.set_value(int(watchdog_counter), ua.VariantType.Int16)
+                except Exception as e:
+                    ros_node.get_logger().warn(f"Watchdog konnte nicht gesendet werden: {e}")
+
+                # /dock_status
                 if ros_node.is_docked is not None:
-                    await dock_status_node["is_docked"].set_value(bool(ros_node.is_docked), ua.VariantType.Boolean)
-                if ros_node.dock_visible is not None:
-                    await dock_status_node["dock_visible"].set_value(bool(ros_node.dock_visible), ua.VariantType.Boolean)
-                
+                    try:
+                        await asyncio.gather(
+                            dock_status_node["is_docked"].set_value(bool(ros_node.is_docked), ua.VariantType.Boolean),
+                            dock_status_node["dock_visible"].set_value(bool(ros_node.dock_visible), ua.VariantType.Boolean)
+                        )
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /dock_status: {e}", throttle_duration_sec=5.0)
+
+                # /wheel_vels
                 if ros_node.velocity_left is not None:
-                    await wheel_vels_node["velocity_left"].set_value(float(ros_node.velocity_left), ua.VariantType.Float)
-                if ros_node.velocity_right is not None:
-                    await wheel_vels_node["velocity_right"].set_value(float(ros_node.velocity_right), ua.VariantType.Float)    
+                    try:
+                        await asyncio.gather(
+                            wheel_vels_node["velocity_left"].set_value(float(ros_node.velocity_left), ua.VariantType.Float),
+                            wheel_vels_node["velocity_right"].set_value(float(ros_node.velocity_right), ua.VariantType.Float)
+                        )
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /wheel_vels: {e}", throttle_duration_sec=5.0)
 
+                # /imu
                 if ros_node.orientation is not None:
-                    await imu_node["orientation_x"].set_value(float(ros_node.orientation.x), ua.VariantType.Double)
-                    await imu_node["orientation_y"].set_value(float(ros_node.orientation.y), ua.VariantType.Double)
-                    await imu_node["orientation_z"].set_value(float(ros_node.orientation.z), ua.VariantType.Double)
-                    await imu_node["orientation_w"].set_value(float(ros_node.orientation.w), ua.VariantType.Double)
+                    try:
+                        await asyncio.gather(
+                            imu_node["orientation_x"].set_value(float(ros_node.orientation.x), ua.VariantType.Double),
+                            imu_node["orientation_y"].set_value(float(ros_node.orientation.y), ua.VariantType.Double),
+                            imu_node["orientation_z"].set_value(float(ros_node.orientation.z), ua.VariantType.Double),
+                            imu_node["orientation_w"].set_value(float(ros_node.orientation.w), ua.VariantType.Double),
 
-                if ros_node.angular_velocity is not None:
-                    await imu_node["angular_velocity_x"].set_value(float(ros_node.angular_velocity.x), ua.VariantType.Double)
-                    await imu_node["angular_velocity_y"].set_value(float(ros_node.angular_velocity.y), ua.VariantType.Double)
-                    await imu_node["angular_velocity_z"].set_value(float(ros_node.angular_velocity.z), ua.VariantType.Double)
+                            imu_node["angular_velocity_x"].set_value(float(ros_node.angular_velocity.x), ua.VariantType.Double),
+                            imu_node["angular_velocity_y"].set_value(float(ros_node.angular_velocity.y), ua.VariantType.Double),
+                            imu_node["angular_velocity_z"].set_value(float(ros_node.angular_velocity.z), ua.VariantType.Double),
 
-                if ros_node.linear_acceleration is not None:
-                    await imu_node["linear_acceleration_x"].set_value(float(ros_node.linear_acceleration.x), ua.VariantType.Double)
-                    await imu_node["linear_acceleration_y"].set_value(float(ros_node.linear_acceleration.y), ua.VariantType.Double)
-                    await imu_node["linear_acceleration_z"].set_value(float(ros_node.linear_acceleration.z), ua.VariantType.Double)
+                            imu_node["linear_acceleration_x"].set_value(float(ros_node.linear_acceleration.x), ua.VariantType.Double),
+                            imu_node["linear_acceleration_y"].set_value(float(ros_node.linear_acceleration.y), ua.VariantType.Double),
+                            imu_node["linear_acceleration_z"].set_value(float(ros_node.linear_acceleration.z), ua.VariantType.Double)
+                        )
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /imu: {e}", throttle_duration_sec=5.0)
 
+                # /ip
                 if ros_node.ip is not None:
-                    await ip_node.set_value(str(ros_node.ip), ua.VariantType.String)
+                    try:
+                        await ip_node.set_value(str(ros_node.ip), ua.VariantType.String)
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /ip: {e}", throttle_duration_sec=5.0)
 
+                # /battery_state
                 if ros_node.voltage is not None:
-                    await battery_state_node["voltage"].set_value(float(ros_node.voltage), ua.VariantType.Float)
-                if ros_node.temperature is not None:
-                    await battery_state_node["temperature"].set_value(float(ros_node.temperature), ua.VariantType.Float)
-                if ros_node.percentage is not None:
-                    await battery_state_node["percentage"].set_value(float(ros_node.percentage), ua.VariantType.Float)
+                    try:
+                        await asyncio.gather(
+                            battery_state_node["voltage"].set_value(float(ros_node.voltage), ua.VariantType.Float),
+                            battery_state_node["temperature"].set_value(float(ros_node.temperature), ua.VariantType.Float),
+                            battery_state_node["percentage"].set_value(float(ros_node.percentage), ua.VariantType.Float)
+                        )
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /battery_state: {e}", throttle_duration_sec=5.0)
 
-                if ros_node.odom_position_x is not None:
-                    await odom_node["odom_position_x"].set_value(float(ros_node.odom_position_x), ua.VariantType.Double)
-                    await odom_node["odom_position_y"].set_value(float(ros_node.odom_position_y), ua.VariantType.Double)
-                    await odom_node["odom_position_z"].set_value(float(ros_node.odom_position_z), ua.VariantType.Double)
+                # /odom
+                if ros_node.odom_position is not None:
+                    try:
+                        await asyncio.gather(
+                            odom_node["odom_position_x"].set_value(float(ros_node.odom_position.x), ua.VariantType.Double),
+                            odom_node["odom_position_y"].set_value(float(ros_node.odom_position.y), ua.VariantType.Double),
+                            odom_node["odom_position_z"].set_value(float(ros_node.odom_position.z), ua.VariantType.Double),
 
-                    await odom_node["odom_orientierung_x"].set_value(float(ros_node.odom_orientierung_x), ua.VariantType.Double)
-                    await odom_node["odom_orientierung_y"].set_value(float(ros_node.odom_orientierung_y), ua.VariantType.Double)
-                    await odom_node["odom_orientierung_z"].set_value(float(ros_node.odom_orientierung_z), ua.VariantType.Double)
-                    await odom_node["odom_orientierung_w"].set_value(float(ros_node.odom_orientierung_w), ua.VariantType.Double)
+                            odom_node["odom_orientierung_x"].set_value(float(ros_node.odom_orientation.x), ua.VariantType.Double),
+                            odom_node["odom_orientierung_y"].set_value(float(ros_node.odom_orientation.y), ua.VariantType.Double),
+                            odom_node["odom_orientierung_z"].set_value(float(ros_node.odom_orientation.z), ua.VariantType.Double),
+                            odom_node["odom_orientierung_w"].set_value(float(ros_node.odom_orientation.w), ua.VariantType.Double),
 
-                    await odom_node["odom_vel_linear_x"].set_value(float(ros_node.odom_vel_linear_x), ua.VariantType.Double)
-                    await odom_node["odom_vel_linear_y"].set_value(float(ros_node.odom_vel_linear_y), ua.VariantType.Double)
-                    await odom_node["odom_vel_linear_z"].set_value(float(ros_node.odom_vel_linear_z), ua.VariantType.Double)
+                            odom_node["odom_vel_linear_x"].set_value(float(ros_node.odom_linear.x), ua.VariantType.Double),
+                            odom_node["odom_vel_linear_y"].set_value(float(ros_node.odom_linear.y), ua.VariantType.Double),
+                            odom_node["odom_vel_linear_z"].set_value(float(ros_node.odom_linear.z), ua.VariantType.Double),
 
-                    await odom_node["odom_angular_x"].set_value(float(ros_node.odom_angular_x), ua.VariantType.Double)
-                    await odom_node["odom_angular_y"].set_value(float(ros_node.odom_angular_y), ua.VariantType.Double)
-                    await odom_node["odom_angular_z"].set_value(float(ros_node.odom_angular_z), ua.VariantType.Double)
-                # Kurze Pause 
+                            odom_node["odom_angular_x"].set_value(float(ros_node.odom_angular.x), ua.VariantType.Double),
+                            odom_node["odom_angular_y"].set_value(float(ros_node.odom_angular.y), ua.VariantType.Double),
+                            odom_node["odom_angular_z"].set_value(float(ros_node.odom_angular.z), ua.VariantType.Double)
+                        )
+                    except Exception as e:
+                        ros_node.get_logger().warn(f" Fehler beim Schreiben von /odom: {e}", throttle_duration_sec=5.0)
+
+                # Kurze Pause
                 await asyncio.sleep(0.05)
                 
         except KeyboardInterrupt:
