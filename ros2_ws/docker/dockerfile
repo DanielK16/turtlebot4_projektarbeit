@@ -1,68 +1,70 @@
 # Autor Daniel Körper
-# ROS2 Container für die Entwicklung mit Zenoh und Turtlebot4
+# Dockerfile für die Entwicklung mit Zenoh und Turtlebot4
 
-# Basis Image
+###### Basis Image mit Humble als Standard #####
 ARG ROS_DISTRO=humble
 FROM osrf/ros:${ROS_DISTRO}-desktop
 ARG ROS_DISTRO
 
+# Version der Zenoh Bridge
+ARG ZENOH_VERSION=1.9.0
+ARG SYSTEM_VERSION=x86_64
+
 # Environment Variablen
-ENV PIP_BREAK_SYSTEM_PACKAGES=1         
+# Erlaubt Pip Installationen
+ENV PIP_BREAK_SYSTEM_PACKAGES=1 
+# verhindert Rückfragen während Installation        
 ENV DEBIAN_FRONTEND=noninteractive      
 ENV XDG_RUNTIME_DIR=/tmp/runtime-ros   
 
 # System Abhängigkeiten und Basic Tools
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-    wget \
-    apt-utils \
-    curl \
-    build-essential \
-    python3-pip \
-    python3-colcon-common-extensions && \
+        apt-utils \
+        build-essential \
+        curl \
+        git \
+        nano \
+        python3-pip \
+        python3-colcon-common-extensions \
+        sudo \
+        unzip \
+        wget && \
     rm -rf /var/lib/apt/lists/*
 
-# asyncua
-RUN apt-get update && \
-    pip3 install asyncua --ignore-installed cryptography
+# Installation asyncua
+RUN pip3 install asyncua --ignore-installed cryptography
 
-# Packages for TB4 
+# Packages for TB4 & Cyclone DDS
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Common TB4 Packages
-    ros-${ROS_DISTRO}-turtlebot4-description \
-    ros-${ROS_DISTRO}-turtlebot4-msgs \
-    ros-${ROS_DISTRO}-turtlebot4-navigation \
-    ros-${ROS_DISTRO}-turtlebot4-node \
-    # TB4 Simulation
-    ros-${ROS_DISTRO}-turtlebot4-simulator \
-    ros-${ROS_DISTRO}-irobot-create-nodes \
-    ros-dev-tools \
-    # For Visualizing and Interfacing with Turtlebot from a PC
-    ros-${ROS_DISTRO}-turtlebot4-desktop \
-    # teleop twist keyboard
-    ros-${ROS_DISTRO}-teleop-twist-keyboard \
-    # Lidar Drivers
-    ros-${ROS_DISTRO}-rplidar-ros \
-    # OAK D Camera Drivers
-    ros-${ROS_DISTRO}-depthai-ros && \
+        # Common TB4 Packages
+        ros-${ROS_DISTRO}-turtlebot4-description \
+        ros-${ROS_DISTRO}-turtlebot4-msgs \
+        ros-${ROS_DISTRO}-turtlebot4-navigation \
+        ros-${ROS_DISTRO}-turtlebot4-node \
+        # TB4 Simulation
+        ros-${ROS_DISTRO}-turtlebot4-simulator \
+        ros-${ROS_DISTRO}-irobot-create-nodes \
+        ros-dev-tools \
+        # For Visualizing and Interfacing with Turtlebot from a PC
+        ros-${ROS_DISTRO}-turtlebot4-desktop \
+        # teleop twist keyboard
+        ros-${ROS_DISTRO}-teleop-twist-keyboard \
+        # Lidar Drivers
+        ros-${ROS_DISTRO}-rplidar-ros \
+        # OAK D Camera Drivers
+        ros-${ROS_DISTRO}-depthai-ros \
+        # Cyclone DDS
+        ros-${ROS_DISTRO}-rmw-cyclonedds-cpp && \
     rm -rf /var/lib/apt/lists/*
 
-# Cyclone DDS
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp && \
-    rm -rf /var/lib/apt/lists/*
-
-# ROS2 Environment updaten
-RUN rosdep update && \
-    grep -F "source /opt/ros/${ROS_DISTRO}/setup.bash" /root/.bashrc || echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    grep -F "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" /root/.bashrc || echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /root/.bashrc
-
-# ROS User anlegen
-RUN id -u 1000 &>/dev/null && userdel -r $(getent passwd 1000 | cut -d: -f1) || true
-
+###### ROS Benutzer anlegen (ohne root) #####
 ARG USERNAME=ros
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
+
+# vorhandenen Benutzer mit UID 1000 entfernen 
+RUN id -u 1000 > /dev/null 2>&1 && userdel -r $(getent passwd 1000 | cut -d: -f1) || true
 
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
@@ -74,50 +76,52 @@ RUN echo "$USERNAME ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
     && usermod -aG video,dialout $USERNAME
 
-# ROS 2 Umgebung automatisch laden
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
-
 # Standard-User setzen 
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
-# Github Clone
-WORKDIR /home/ros/tmp
-RUN git clone https://github.com/DanielK16/turtlebot4_projektarbeit.git
+# ROS2 Environment automatisch laden in Shell für den User
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc && \
+    echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc
+
+###### Projekt aus GitHub installieren #####
+WORKDIR /home/$USERNAME/tmp
+RUN git clone --depth 1 https://github.com/DanielK16/turtlebot4_projektarbeit.git
+
 # Dateien innerhalb des Containers verschieben 
-RUN mkdir -p /home/ros/ros2_ws/src && \
-    cp -r /home/ros/tmp/turtlebot4_projektarbeit/ros2_ws/src/* /home/ros/ros2_ws/src/ && \
-    rm -rf /home/ros/tmp
-WORKDIR /home/ros/ros2_ws
-RUN rosdep update 
-RUN sudo apt-get update && \
+RUN mkdir -p /home/$USERNAME/ros2_ws/src && \
+    cp -r /home/$USERNAME/tmp/turtlebot4_projektarbeit/ros2_ws/src/* /home/$USERNAME/ros2_ws/src/ && \
+    rm -rf /home/$USERNAME/tmp
+
+WORKDIR /home/$USERNAME/ros2_ws
+
+# ROS2 Abhängigkeiten installieren
+RUN rosdep update && \
+    sudo apt-get update && \
     rosdep install --from-paths src --ignore-src -r -y && \
     sudo rm -rf /var/lib/apt/lists/*
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
 
-# Zenoh Install
-WORKDIR /home/ros/zenoh
+# Bauen des Workspaces    
+RUN /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && colcon build --symlink-install"
 
-RUN sudo apt-get update && \
-    sudo apt-get install -y \
-    python3-pip \
-    unzip \
-    wget \
-    nano \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
+# Workspace Auto-Sourcing zur .bashrc hinzufügen
+RUN echo "source /home/$USERNAME/ros2_ws/install/setup.bash" >> /home/$USERNAME/.bashrc
 
-RUN sudo apt-get update && \
-    pip3 install eclipse-zenoh==1.9.0 pycdr2
+###### Zenoh Bridge installieren #####
+WORKDIR /home/$USERNAME/zenoh
 
-ENV ZENOH_VERSION=1.9.0
-RUN wget -O zenoh-plugin-ros2dds.zip https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds/releases/download/$ZENOH_VERSION/zenoh-plugin-ros2dds-$ZENOH_VERSION-x86_64-unknown-linux-gnu-standalone.zip
-RUN unzip zenoh-plugin-ros2dds.zip && \
+RUN pip3 install eclipse-zenoh==${ZENOH_VERSION} pycdr2
+
+RUN wget -O zenoh-plugin-ros2dds.zip https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds/releases/download/${ZENOH_VERSION}/zenoh-plugin-ros2dds-${ZENOH_VERSION}-${SYSTEM_VERSION}-unknown-linux-gnu-standalone.zip && \
+    unzip zenoh-plugin-ros2dds.zip && \
+    rm zenoh-plugin-ros2dds.zip && \
     chmod +x zenoh-bridge-ros2dds
 
-# ROS2 Environment exportieren
+# ROS2 Umgebungsvariablen
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ENV ROS_DOMAIN_ID=0
 ENV ROS_LOCALHOST_ONLY=0
 
 # Automatischer Start der entrypoint.py
-CMD ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && python3 /home/ros/ros2_ws/docker/entrypoint.py"]
+WORKDIR /home/$USERNAME/ros2_ws
+CMD ["/bin/bash", "-c", "source /opt/ros/${ROS_DISTRO}/setup.bash && source /home/$USERNAME/ros2_ws/install/setup.bash && python3 /home/$USERNAME/ros2_ws/docker/entrypoint.py"]
