@@ -6,7 +6,7 @@ from rclpy.node import Node
 import os
 
 # Import Interfaces für ROS2 Messages
-from irobot_create_msgs.msg import DockStatus, WheelVels
+from irobot_create_msgs.msg import DockStatus, WheelVels, HazardDetectionVector, HazardDetection
 from sensor_msgs.msg import Imu, BatteryState
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
@@ -53,6 +53,13 @@ class OPC_UA_Client_Node(Node):
         self.odom_orientation = None
         self.odom_linear = None
         self.odom_angular = None
+        # /hazard_detection
+        self.backup_limit = False
+        self.bump = False
+        self.cliff = False
+        self.stall = False
+        self.wheel_drop = False
+        self.object_proximity = False
 
         # Subscriber für /dock_status
         self.dock_status_sub = self.create_subscription(
@@ -99,6 +106,13 @@ class OPC_UA_Client_Node(Node):
             qos_profile_sensor_data
         )
 
+        # Subscriber für /hazard_detection
+        self.hazard_detection_sub = self.create_subscription(
+            HazardDetectionVector,
+            '/hazard_detection',
+            self.hazard_detection_callback,
+            qos_profile_sensor_data
+        )
 
     # Verarbeiten von Subscribern erhaltenen Daten    
     def dock_status_callback(self, msg):
@@ -127,6 +141,30 @@ class OPC_UA_Client_Node(Node):
         self.odom_orientation = msg.pose.pose.orientation
         self.odom_linear = msg.twist.twist.linear
         self.odom_angular = msg.twist.twist.angular
+
+    def hazard_detection_callback(self,msg):
+        self.reset_hazard_detection()
+        for detection in msg.detections:
+            if detection.type == HazardDetection.BACKUP_LIMIT:
+                self.backup_limit = True
+            elif detection.type == HazardDetection.BUMP:
+                self.bump = True
+            elif detection.type == HazardDetection.CLIFF:
+                self.cliff = True
+            elif detection.type == HazardDetection.STALL:
+                self.stall = True
+            elif detection.type == HazardDetection.WHEEL_DROP:
+                self.wheel_drop = True
+            elif detection.type == HazardDetection.OBJECT_PROXIMITY:
+                self.object_proximity = True
+
+    def reset_hazard_detection(self):
+        self.backup_limit = False
+        self.bump = False
+        self.cliff = False
+        self.stall = False
+        self.wheel_drop = False
+        self.object_proximity = False
 
 def spin_ros(ros_node):
     """ Verarbeitet die ROS2 Callbacks (spin_once verarbeitet nur einen Callback) """
@@ -198,7 +236,15 @@ async def async_main(args=None):
             "odom_angular_x": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.x"),
             "odom_angular_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.y"),
             "odom_angular_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.z"),
-            "odom_angular_w": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.odom.twist.angular.w"),
+        }
+
+        hazard_node = {
+            "backup_limit": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.backup_limit"),
+            "bump": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.bump"),
+            "cliff": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.cliff"),
+            "stall": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.stall"),
+            "wheel_drop": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.wheel_drop"),
+            "object_proximity": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.hazard_detection.object_proximity"),
         }
 
         watchdog_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.status.watchdog_counter")
@@ -299,6 +345,20 @@ async def async_main(args=None):
                         )
                     except Exception as e:
                         ros_node.get_logger().warn(f" Fehler beim Schreiben von /odom: {e}", throttle_duration_sec=5.0)
+
+                # /hazard_detection
+                try:
+                    await asyncio.gather(
+                        hazard_node["backup_limit"].set_value(bool(ros_node.backup_limit), ua.VariantType.Boolean),
+                        hazard_node["bump"].set_value(bool(ros_node.bump), ua.VariantType.Boolean),
+                        hazard_node["cliff"].set_value(bool(ros_node.cliff), ua.VariantType.Boolean),
+                        hazard_node["stall"].set_value(bool(ros_node.stall), ua.VariantType.Boolean),
+                        hazard_node["wheel_drop"].set_value(bool(ros_node.wheel_drop), ua.VariantType.Boolean),
+                        hazard_node["object_proximity"].set_value(bool(ros_node.object_proximity), ua.VariantType.Boolean)
+                    )
+                except Exception as e:
+                    ros_node.get_logger().warn(f" Fehler beim Schreiben von /hazard_detection: {e}", throttle_duration_sec=5.0)
+
 
                 # Kurze Pause
                 await asyncio.sleep(0.05)

@@ -1,6 +1,6 @@
 # Autor Daniel Körper
 # Dockerfile für die Entwicklung mit Zenoh und Turtlebot4
-
+# Installiert automatisch Zenoh und benötigten Quellcode 
 
 ###### Basis Image mit Humble als Standard #####
 ARG ROS_DISTRO=humble

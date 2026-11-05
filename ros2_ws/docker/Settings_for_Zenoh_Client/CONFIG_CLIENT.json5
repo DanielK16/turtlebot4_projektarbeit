@@ -12,5 +12,16 @@
         password: "turtlebot4"
       }
     }
+  },
+
+  plugins: {
+    ros2dds: {
+      deny: {
+        publishers: [".*/_internal/.*", "/rosout", "/parameter_events"],
+        subscribers: [".*/_internal/.*", "/rosout", "/parameter_events"],
+        service_servers: [".*/_internal/.*"],
+        service_clients: [".*/_internal/.*"]
+      }
+    }
   }
 }
