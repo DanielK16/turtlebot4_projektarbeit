@@ -37,6 +37,7 @@ class OPC_UA_Client_Node(Node):
 
         # Publisher erstellen /cmd_vel
         self.cmd_vel_publisher = self.create_publisher(Twist,"/cmd_vel",10)
+        self.was_moving = False
 
         # Aktuelle Sollwerte für /cmd_vel
         self.cmd_vel_freigabe = None
@@ -108,12 +109,17 @@ class OPC_UA_Client_Node(Node):
 
     def cmd_vel_control(self):
         """Publiziert die aktuellen Sollwerte kontinuierlich """
-        if self.cmd_vel_freigabe:
+        moving = self.cmd_vel_freigabe and (self.linear_x != 0.0 or self.angular_z != 0.0)
+        if moving:
             msg = Twist()
             msg.linear.x = self.linear_x * self.man_velocity
             msg.angular.z = self.angular_z * self.man_velocity
             self.cmd_vel_publisher.publish(msg)
-
+            self.was_moving = True
+        elif self.was_moving:
+            self.stop_cmd_vel_control()
+            self.was_moving = False
+            
     def stop_cmd_vel_control(self):
         msg = Twist()
         msg.linear.x = 0.0
