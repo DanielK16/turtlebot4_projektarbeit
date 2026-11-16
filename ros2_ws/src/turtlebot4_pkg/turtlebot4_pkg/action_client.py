@@ -8,7 +8,10 @@ from rclpy.node import Node
 # Import Interfaces für ROS2 Messages
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
 
-from turtlebot4_navigation.turtlebot4_navigator import TurtleBot4Navigator, TaskResult
+# Der Turtlebot4 Navigator ist blockierend wodurch die Verbidnung zum Watchdog abbricht.
+# Deswegen wird der Simple Commander verwendet, der die Nav2 Befehle in einem extra Thread ausführt.
+#from turtlebot4_navigation.turtlebot4_navigator import TurtleBot4Navigator, TaskResult
+from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
 # Imports für Asyncua
 import asyncio
@@ -30,7 +33,7 @@ class OPC_UA_Client_Node(Node):
     def __init__(self):
         super().__init__("opc_ua_client_node")
 
-        self.navigator = TurtleBot4Navigator()
+        self.navigator = BasicNavigator()
 
         # Publisher zu /initialpose erstellen
         self.initialpose_pub = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', 10)
@@ -79,11 +82,10 @@ class OPC_UA_Client_Node(Node):
         """ Navigiert TB4 an die vorgegebene Zielposition """
         # Warten bis Nav2 bereit ist
         self.navigator.waitUntilNav2Active()
-    
+        # Erstellen der Ziel Position
         goal_pose = PoseStamped()
         goal_pose.header.frame_id = 'map'
         goal_pose.header.stamp = self.get_clock().now().to_msg()
-        
         goal_pose.pose.position.x = float(self.goalpose_trans_x)
         goal_pose.pose.position.y = float(self.goalpose_trans_y)
         goal_pose.pose.position.z = float(self.goalpose_trans_z)
@@ -96,16 +98,16 @@ class OPC_UA_Client_Node(Node):
         self.nav_status_code = 0
 
         # Fahrbefehl absenden
-        self.navigator.startToPose(goal_pose)
+        self.navigator.goToPose(goal_pose)
         self.get_logger().info(f"Fahrbefehl an Nav2 gesendet: Ziel [{goal_pose.pose.position.x:.2f}, {goal_pose.pose.position.y:.2f}]")
         
-        # Überwachungstimer (alle 0.2 Sekunden) starten
+        # Timer um Status der Fahrt überwachen
         if self.nav_check_timer is not None:
             self.nav_check_timer.cancel()
         self.nav_check_timer = self.create_timer(0.2, self.check_nav_status)
 
     def check_nav_status(self):
-        """ Prüft periodisch den Task-Status von Nav2 und ordnet Fehlercodes zu """
+        """ Prüft Task Status von Nav2 und ordnet Fehlercode zu."""
         if self.navigator.isTaskComplete():
             result = self.navigator.getResult()
             
@@ -130,6 +132,12 @@ class OPC_UA_Client_Node(Node):
                 self.nav_check_timer.cancel()
                 self.nav_check_timer = None
 
+    def cancel_navigation(self):
+        """ Bricht ein laufendes Navigationsziel ab """
+        if self.navigator.isTaskComplete():
+            self.get_logger().info("Kein aktives Navigationsziel zum abbrechen vorhanden!")
+        self.navigator.cancelTask()
+        self.get_logger().info("Navigationsziel wurde abgebrochen")
 
 class SubscriptionHandler:
     def __init__(self, ros_node):
@@ -141,7 +149,7 @@ class SubscriptionHandler:
         
         node_str = str(node)
 
-        # --- INITIAL POSE ---
+        # INITIAL POSE 
         if node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.initial_pose.position.x":
             if val is not None: self.ros_node.initialpose_trans_x = val
         elif node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.initial_pose.position.y":
@@ -160,7 +168,7 @@ class SubscriptionHandler:
             if val: 
                 self.ros_node.set_initialpose()
 
-        # --- GOAL POSE ---
+        # GOAL POSE
         elif node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.goal_pose.position.x":
             if val is not None: self.ros_node.goalpose_trans_x = val
         elif node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.goal_pose.position.y":
@@ -177,10 +185,11 @@ class SubscriptionHandler:
             if val is not None: self.ros_node.goalpose_orient_w = val
         elif node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.request_move_to_goal":
             if val: 
-                # Kurze Pause (50ms) zur Synchronisierung eintreffender Koordinaten
-                await asyncio.sleep(0.05)
                 self.ros_node.move_to_goal()
-
+        elif node_str == "ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.request_cancel_goal":
+            if val: 
+                self.ros_node.cancel_navigation()
+        
 
 async def async_main(args=None):
     # Instanziieren der ROS2 Node Klasse
@@ -225,7 +234,8 @@ async def async_main(args=None):
                 "orient_y": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.goal_pose.orientation.y"),
                 "orient_z": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.goal_pose.orientation.z"),
                 "orient_w": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.goal_pose.orientation.w"),
-                "request_move": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.request_move_to_goal")
+                "request_move": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.request_move_to_goal"),
+                "request_cancel": client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.request_cancel_goal")
             }
 
             # Subscription Handler
@@ -237,7 +247,7 @@ async def async_main(args=None):
                 initialpose_node["request_set"],
                 goalpose_node["trans_x"], goalpose_node["trans_y"], goalpose_node["trans_z"],
                 goalpose_node["orient_x"], goalpose_node["orient_y"], goalpose_node["orient_z"], goalpose_node["orient_w"],
-                goalpose_node["request_move"]
+                goalpose_node["request_move"], goalpose_node["request_cancel"]
             ])
 
             watchdog_node = client.get_node("ns=4;s=|var|CODESYS Virtual Control for Linux SL.Application.GVL_OPCUA.navigation.watchdog_counter")
@@ -256,9 +266,7 @@ async def async_main(args=None):
 
                 # neuen Statuscode anlegen
                 if ros_node.nav_status_code is not None:
-                    await status_code_node.set_value(
-                        ua.DataValue(ua.Variant(int(ros_node.nav_status_code), ua.VariantType.Int16))
-                    )
+                    await status_code_node.write_value((int(ros_node.nav_status_code), ua.VariantType.Int16))
                     ros_node.get_logger().info(f"Statuscode '{ros_node.nav_status_code}' an CODESYS übertragen.")
                     ros_node.nav_status_code = None
                 
@@ -267,6 +275,7 @@ async def async_main(args=None):
     except Exception as e:
         ros_node.get_logger().error(f"OPC-UA-Fehler: {e}")
     finally:
+        ros_node.cancel_navigation()
         ros_node.destroy_node()
 
 def main(args=None):
