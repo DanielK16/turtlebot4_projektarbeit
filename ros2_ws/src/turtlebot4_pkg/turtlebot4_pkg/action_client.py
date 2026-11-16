@@ -266,7 +266,7 @@ async def async_main(args=None):
 
                 # neuen Statuscode anlegen
                 if ros_node.nav_status_code is not None:
-                    await status_code_node.write_value((int(ros_node.nav_status_code), ua.VariantType.Int16))
+                    await status_code_node.write_value(int(ros_node.nav_status_code), ua.VariantType.Int16)
                     ros_node.get_logger().info(f"Statuscode '{ros_node.nav_status_code}' an CODESYS übertragen.")
                     ros_node.nav_status_code = None
                 
