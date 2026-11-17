@@ -22,6 +22,7 @@ RVIZ2_ROBOT_IS_RUNNING = False
 NAV2_IS_RUNNING = False
 LOCALISATION_IS_RUNNING= False
 ZENOH_IS_RUNNING = False
+STATIC_TF_IS_RUNNING = False
 
 # Prozesse
 SLAM_SYNC_PROZESS = None
@@ -31,9 +32,44 @@ RVIZ2_ROBOT_PROZESS = None
 NAV2_PROZESS = None
 LOCALIZATION_PROZESS = None
 ZENOH_PROZESS = None
+STATIC_TF_PROZESS = None
 
 # Name für Lokalisierungslaunch
 NAME_LOKALISIERUNG = "test_map"
+
+def Start_Static_TF():
+    global STATIC_TF_IS_RUNNING
+    global STATIC_TF_PROZESS
+    if STATIC_TF_IS_RUNNING is True and STATIC_TF_PROZESS.poll() is None:
+        print("Static TF Node läuft bereits!")
+        return
+
+    arbeitsverzeichnis = os.path.expanduser("~/ros2_ws")
+    command = "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run turtlebot4_pkg tf_static"
+    STATIC_TF_PROZESS = subprocess.Popen(["/bin/bash", "-c", command], cwd=arbeitsverzeichnis, start_new_session=True)
+    print("Static TF Node gestartet")
+    STATIC_TF_IS_RUNNING = True
+
+def Stop_Static_TF():
+    global STATIC_TF_IS_RUNNING
+    global STATIC_TF_PROZESS
+    if STATIC_TF_IS_RUNNING is True:
+        print("Sende Stop Signal an Static TF Node...")
+        try:
+            os.killpg(os.getpgid(STATIC_TF_PROZESS.pid), signal.SIGINT)
+            STATIC_TF_PROZESS.wait(timeout=5)
+            print("Static TF Node erfolgreich beendet")
+        except Exception as e:
+            print(f"Fehler beim Beenden: {e}")
+        finally:
+            STATIC_TF_IS_RUNNING = False
+    else:
+        print("Kein Static TF Prozess da zum stoppen!")
+
+def Publish_Static_TF():
+    if STATIC_TF_IS_RUNNING is True and STATIC_TF_PROZESS.poll() is None:
+        Stop_Static_TF()
+    Start_Static_TF()
 
 def Start_Zenoh():
     global ZENOH_IS_RUNNING
@@ -71,6 +107,9 @@ def Start_SLAM_sync():
         print("SLAM Synchron läuft bereits!")
         return
 
+    # Zuerst statische TFs veröffentlichen
+    Start_Static_TF()
+
     command = "ros2 launch turtlebot4_navigation slam.launch.py sync:=true"
     SLAM_SYNC_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
     print("Synchroner SLAM Launch gestartet")
@@ -91,6 +130,8 @@ def Stop_SLAM_sync():
             SLAM_SYNC_IS_RUNNING = False
     else:
         print("Kein Prozess da zum stoppen!")
+    # Statische TFs ebenfalls beenden
+    Stop_Static_TF()
 
 def Start_SLAM_async():
     global SLAM_ASYNC_IS_RUNNING
@@ -99,6 +140,9 @@ def Start_SLAM_async():
     if SLAM_ASYNC_IS_RUNNING is True and SLAM_ASYNC_PROZESS.poll() is None:
         print("SLAM Asynchron läuft bereits!")
         return
+
+    # Zuerst statische TFs veröffentlichen
+    Start_Static_TF()
 
     command = "ros2 launch turtlebot4_navigation slam.launch.py sync:=false"
     SLAM_ASYNC_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
@@ -120,6 +164,8 @@ def Stop_SLAM_async():
             SLAM_ASYNC_IS_RUNNING = False
     else:
         print("Kein Prozess da zum stoppen!")
+    # Statische TFs ebenfalls beenden
+    Stop_Static_TF()
 
 def Start_RViz2_Robot():
     global RVIZ2_ROBOT_IS_RUNNING
@@ -128,6 +174,9 @@ def Start_RViz2_Robot():
     if RVIZ2_ROBOT_IS_RUNNING is True and RVIZ2_ROBOT_PROZESS.poll() is None:
         print("RVi2 Roboter läuft bereits!")
         return
+
+    # Zuerst statische TFs veröffentlichen
+    Start_Static_TF()
 
     command = "ros2 launch turtlebot4_viz view_robot.launch.py"
     RVIZ2_ROBOT_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
@@ -149,6 +198,8 @@ def Stop_RViz2_Robot():
             RVIZ2_ROBOT_IS_RUNNING = False
     else:
         print("Kein Prozess da zum stoppen!")
+    # Statische TFs ebenfalls beenden
+    Stop_Static_TF()
 
 def Start_OPC_Clients():
     global OPC_CLIENTS_IS_RUNNING
@@ -190,6 +241,9 @@ def Start_Lokalisierung():
         print("Lokalisierung läuft bereits!")
         return
 
+    # Zuerst statische TFs veröffentlichen
+    Start_Static_TF()
+
     command = f"ros2 launch turtlebot4_navigation localization.launch.py map:=/home/ros/ros2_ws/src/turtlebot4_pkg/maps/{NAME_LOKALISIERUNG}.yaml"
     LOCALIZATION_PROZESS = subprocess.Popen(["/bin/bash", "-c", command], start_new_session=True)
     print("Lokalisierungslaunch gestartet gestartet")
@@ -210,6 +264,8 @@ def Stop_Lokalisierung():
             LOCALISATION_IS_RUNNING = False
     else:
         print("Kein Prozess da zum stoppen!")
+    # Statische TFs ebenfalls beenden
+    Stop_Static_TF()
 
 def Start_Navigation2():
     global NAV2_IS_RUNNING
@@ -218,6 +274,9 @@ def Start_Navigation2():
     if NAV2_IS_RUNNING is True and NAV2_PROZESS.poll() is None:
         print("NAV2 läuft bereits!")
         return
+
+    # Zuerst statische TFs veröffentlichen
+    Start_Static_TF()
 
     command = "ros2 launch turtlebot4_navigation nav2.launch.py"
     NAV2_PROZESS = subprocess.Popen(["/bin/bash", "-c", command],start_new_session=True)
@@ -239,6 +298,8 @@ def Stop_Navigation2():
             NAV2_IS_RUNNING = False
     else:
         print("Kein Prozess da zum stoppen!")
+    # Statische TFs ebenfalls beenden
+    Stop_Static_TF()
 
 
 class SubscriptionHandler:
@@ -342,4 +403,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Str + C gedrückt: Beende alle ROS2 Prozesse")
     finally:
+        Stop_Static_TF()
         print("Alle Prozesse beendet!")
