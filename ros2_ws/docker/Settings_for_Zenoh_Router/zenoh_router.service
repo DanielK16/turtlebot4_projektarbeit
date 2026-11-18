@@ -1,5 +1,5 @@
 [Unit]
-Description= Zenoh Router (mit snap installiert) bei Start des Rasperry Pi starten
+Description= Zenoh Router bei Start des Rasperry Pi starten
 Wants=network-online.target
 After=network-online.target
 
