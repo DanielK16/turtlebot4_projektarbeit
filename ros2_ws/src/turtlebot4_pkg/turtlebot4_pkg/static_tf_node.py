@@ -1,8 +1,10 @@
 # Autor: Daniel Koerper
 # Veröffentlicht die statischen Transformationen von LiDAR, Kamera, IMU und Bumper
 # lokal im Container auf /tf_static.
-# Beim Start von Lokalisierung, Nav2 oder RViz2 fehlen diese Transformationen sonst
-# RPLIDAR wird beispielsweise für globale Costmap benötigt!
+
+# Problem: Vor Start von Nav2, Lokalisierung, SLAM oder RViz2 statische Transf. vorhanden.
+# Nach Start fehlen diese Transformationen!
+# Neuveröffentlichung bei Start über entrypoint.py!
 # manuell starten mit ros2 run turtlebot4_pkg static_tf_node
 
 import rclpy
@@ -28,7 +30,6 @@ class StaticTfNode(Node):
         tf_rplidar.transform.rotation.y = 0.0
         tf_rplidar.transform.rotation.z = 0.7071067811865475
         tf_rplidar.transform.rotation.w = 0.7071067811865476
-
 
         # Kamera
         tf_oakd_bracket = TransformStamped()
@@ -139,7 +140,6 @@ class StaticTfNode(Node):
         tf_oakd_right_optical.transform.rotation.z = 0.5
         tf_oakd_right_optical.transform.rotation.w = -0.5
 
-
         # IMU 
         tf_imu_link = TransformStamped()
         tf_imu_link.header.stamp = now
@@ -164,7 +164,6 @@ class StaticTfNode(Node):
         tf_imu.transform.rotation.y = 0.0
         tf_imu.transform.rotation.z = 0.0
         tf_imu.transform.rotation.w = 1.0
-
 
         # Bumper 
         tf_bumper = TransformStamped()
@@ -197,7 +196,6 @@ class StaticTfNode(Node):
         self.broadcaster.sendTransform(transforms)
         self.get_logger().info(f"{len(transforms)} statische Transformationen veroeffentlicht.")
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = StaticTfNode()
@@ -208,7 +206,6 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.try_shutdown()
-
 
 if __name__ == "__main__":
     main()
