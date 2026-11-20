@@ -4,6 +4,7 @@ Dieses Repository enthält eine Kommunikationsschnittstelle zwischen einer virtu
 ## Aufbau und Installation der Entwicklungsumgebung  
 Die ROS 2 Programme laufen in einem Docker-Container unter WSL2. Da WSL2 im NAT-Modus betrieben wird, ist eine direkte DDS-Verbindung zum Roboter im WLAN nicht möglich. Die Verbindung zwischen Container und TurtleBot 4 erfolgt deshalb über die zenoh-bridge-ros2dds.  
 ![Aufbau_Entwicklungsumgebung](doc/img/Entwicklungsumgebung_TB4.svg)  
+
 ## Installation und Aufbau der Container
 Innerhalb des Dockerfiles werden die Zenoh-Schnittstelle und die TurtleBot-4-Pakete installiert und der `ros2_ws` mit `colcon build` gebaut. Anschließend wird aus dem Dockerfile das Image gebaut und aus dem Image der Container erstellt. Beim Start des Containers wird `entrypoint.py` automatisch ausgeführt.  
 ![Ablauf Dockerfile → Image → Container](doc/img/Dockerfile_Image_Container.svg)
@@ -47,7 +48,44 @@ docker run -it \
 | `turtlebot4_projektarbeit` | Name des Images, aus dem der Container erstellt wird. |
 
 ## Aufbau der Clients
-![Aufbau_Clients](doc/img/Aufbau_Clients_TB4.svg)  
+Die SPS ist über vier OPC UA Clients mit ROS 2 verbunden, die im Paket `turtlebot4_pkg` umgesetzt sind. Die Architektur entspricht der Schnittstelle für die Roboterarme. Es ändern sich hauptsächlich die angebundenen ROS 2 Schnittstellen.
+![Aufbau der OPC UA Clients des TurtleBot 4](doc/img/Aufbau_Clients_TB4.svg)
+| Client | Datei | Richtung | Funktion |
+|---|---|---|---|
+| **Status Client** | `status_client.py` | ROS 2 → CODESYS | Überträgt Sensor- und Zustandsdaten des TurtleBot 4 an die SPS |
+| **Command Client** | `command_client.py` | CODESYS → ROS 2 | Manuelle Steuerung, Andocken, Abdocken und Zurücksetzen der Odometrie |
+| **Action Client** | `action_client.py` | CODESYS ↔ ROS 2 | Autonome Navigation mit Nav2 zu Zielpositionen in der Karte |
+| **Config Client** | `entrypoint.py` | CODESYS → Container | Startet und stoppt ROS 2 Prozesse (Zenoh-Bridge, RViz2, SLAM, Lokalisierung, Navigation) über Softkeys |
+
+### Status Client
+Abonniert die Topics der Create3-Basis und des Raspberry Pi und schreibt die Werte zyklisch in die Struktur `tb4_status` im OPC UA Adressraum. Die Sensor-Topics der Create3 werden mit „Best Effort“ veröffentlicht. Der Client abonniert sie deshalb mit dem QoS-Profil `qos_profile_sensor_data`.
+
+| Topic | Interface | Übertragene Daten |
+|---|---|---|
+| `/dock_status` | `irobot_create_msgs/msg/DockStatus` | Dock sichtbar, angedockt |
+| `/wheel_vels` | `irobot_create_msgs/msg/WheelVels` | Radgeschwindigkeiten in rad/s |
+| `/imu` | `sensor_msgs/msg/Imu` | Orientierung, Winkelgeschwindigkeit, Beschleunigung |
+| `/ip` | `std_msgs/msg/String` | IP-Adresse des Raspberry Pi |
+| `/battery_state` | `sensor_msgs/msg/BatteryState` | Spannung, Temperatur, Ladezustand |
+| `/odom` | `nav_msgs/msg/Odometry` | Position und Geschwindigkeit relativ zu `odom` |
+| `/hazard_detection` | `irobot_create_msgs/msg/HazardDetectionVector` | Gefahrenmeldungen (Bumper, Klippe, Blockade, Rückfahrlimit, ...) |
+
+### Command Client
+Wird über Datenänderungen im Adressraum informiert und setzt die Befehle aus CODESYS in ROS 2 Aufrufe um.
+
+| Schnittstelle | Interface | Funktion |
+|---|---|---|
+| `/cmd_vel` (Topic) | `geometry_msgs/msg/Twist` | Sollgeschwindigkeit, solange die Freigabe aktiv ist |
+| `/undock` (Action) | `irobot_create_msgs/action/Undock` | Selbstständiges Abdocken von der Ladestation |
+| `/dock` (Action) | `irobot_create_msgs/action/Dock` | Selbstständiges Andocken an die Ladestation |
+| `/reset_pose` (Service) | `irobot_create_msgs/srv/ResetPose` | Setzt die Position im Odometrie-Koordinatensystem auf den Ursprung zurück |
+
+### Action Client
+Sendet Zielpositionen aus CODESYS an Nav2 und meldet den Fortschritt der Fahrt alle 0,2 s als Statuscode an die SPS zurück. Zusätzlich wird die Initialposition über das Topic `/initialpose` vorgegeben und eine laufende Navigation kann aus CODESYS abgebrochen werden.
+
+### Config Client
+Wird beim Start des Containers automatisch ausgeführt. Die ROS 2 Prozesse werden über Start- und Stop-Variablen vom Typ BOOL in CODESYS gesteuert und als eigene Prozessgruppe gestartet, sodass beim Stoppen alle Unterprozesse beendet werden. Bricht die OPC UA Verbindung ab, versucht der Client sie alle 5 s neu aufzubauen.
+
 ## Kartenerstellung mit SLAM aus Codesys:
 ![Schrittkette_TB4](doc/gif/TB4_Kartenerstellung_x4.gif)
 ## Autonome Navigation
