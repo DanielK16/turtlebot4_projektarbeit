@@ -5,7 +5,8 @@ Dieses Repository enthält eine Kommunikationsschnittstelle zwischen einer virtu
 Die ROS 2 Programme laufen in einem Docker-Container unter WSL2. Da WSL2 im NAT-Modus betrieben wird, ist eine direkte DDS-Verbindung zum Roboter im WLAN nicht möglich. Die Verbindung zwischen Container und TurtleBot 4 erfolgt deshalb über die zenoh-bridge-ros2dds.
 ![Aufbau_Entwicklungsumgebung](doc/img/Entwicklungsumgebung_TB4.svg)  
 ## Installation und Aufbau der Container
-Innerhalb der Dockerfile wird die Zenoh Schnittstelle installiert und derr ros2_ws aufgebaut (colcon build). Anschießend kann aus der Dockerfile das Image gebaut werden und daraus dann der Container.
+Innerhalb des Dockerfiles werden die Zenoh-Schnittstelle und die TurtleBot-4-Pakete installiert und der `ros2_ws` mit `colcon build` gebaut. Anschließend wird aus dem Dockerfile das Image gebaut und aus dem Image der Container erstellt. Beim Start des Containers wird `entrypoint.py` automatisch ausgeführt.
+![Ablauf Dockerfile → Image → Container](doc/img/Dockerfile_Image_Container.svg)
 #### Dockerfile -> Image
 ```bash
 docker build \
