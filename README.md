@@ -6,5 +6,10 @@ Die ROS 2 Programme laufen in einem Docker-Container unter WSL2. Da WSL2 im NAT-
 ![Aufbau_Entwicklungsumgebung](doc/img/Entwicklungsumgebung_TB4.svg)  
 
 
+## Aufbau der Clients
+![Aufbau_Clients](doc/img/Aufbau_Clients_TB4.svg)  
 ## Kartenerstellung mit SLAM aus Codesys:
-![Kartenerstellung_SLAM_Codesys](doc/gif/TB4_Schrittkette_x5.gif)
+![Schrittkette_TB4](doc/gif/TB4_Kartenerstellung_x4.gif)
+## Autonome Navigation
+Ansteuerung des Roboters aus dem Raum 103 und wieder zurück aus einer Schrittkette aus Codesys.
+![Schrittkette_TB4](doc/gif/TB4_Schrittkette_x5.gif)
